@@ -38,7 +38,7 @@ SITE_SELECTORS = {
     },
     'ajio.com': {
         'price': '.prod-sp',
-        'notes': 'prod-sp class (Requires cloudscraper)'
+        'notes': 'prod-sp class'
     },
     'books.toscrape.com': {
         'price': 'p.price_color',

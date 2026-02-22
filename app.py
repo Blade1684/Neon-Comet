@@ -156,11 +156,14 @@ def delete_product(id):
     db.session.commit()
     return jsonify({'success': True})
 
+import threading
+
 @app.route('/api/check-now', methods=['GET', 'POST'])
 def manual_check():
     try:
-        check_prices()
-        return jsonify({'success': True, 'message': 'All prices updated'})
+        # Run in background to prevent request timeout on Render
+        threading.Thread(target=check_prices).start()
+        return jsonify({'success': True, 'message': 'Price check started in background'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

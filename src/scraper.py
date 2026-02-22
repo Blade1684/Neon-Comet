@@ -5,12 +5,6 @@ import json
 from urllib.parse import urlparse
 from .sites import SITE_SELECTORS
 
-try:
-    import cloudscraper
-except ImportError:
-    cloudscraper = None
-
-
 class Scraper:
     def __init__(self):
         # Enforce Desktop User-Agent to avoid mobile pages
@@ -30,15 +24,6 @@ class Scraper:
             'Sec-Fetch-User': '?1',
             'Cache-Control': 'max-age=0',
         }
-        
-        if cloudscraper:
-            self.cloud_session = cloudscraper.create_scraper(browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'mobile': False
-            })
-        else:
-            self.cloud_session = requests.Session()
 
     def _get_domain(self, url):
         parsed = urlparse(url)
@@ -148,13 +133,7 @@ class Scraper:
         headers = self.headers.copy()
         
         try:
-            # Use cloudscraper for Ajio as standard requests are blocked (403 Forbidden)
-            if 'ajio' in domain:
-                print("Using cloudscraper for Ajio...")
-                response = self.cloud_session.get(url, headers=headers, timeout=15)
-            else:
-                response = requests.get(url, headers=headers, timeout=10)
-                
+            response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
             # Debug: Save last HTML
