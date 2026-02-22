@@ -5,8 +5,13 @@ import json
 from urllib.parse import urlparse
 from .sites import SITE_SELECTORS
 
+import os
+
 class Scraper:
     def __init__(self):
+        # Premium ScraperAPI Key checks
+        self.api_key = os.getenv('SCRAPER_API_KEY')
+        
         # Enforce Desktop User-Agent to avoid mobile pages
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -133,7 +138,17 @@ class Scraper:
         headers = self.headers.copy()
         
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            if self.api_key:
+                print(f"Routing request for {domain} through ScraperAPI...")
+                payload = {'api_key': self.api_key, 'url': url}
+                # Render JS if needed for highly dynamic SPA sites
+                if 'ajio' in domain or 'myntra' in domain:
+                    payload['render'] = 'true'
+                # Premium proxies can take longer to handshake
+                response = requests.get('http://api.scraperapi.com', params=payload, timeout=60)
+            else:
+                response = requests.get(url, headers=headers, timeout=10)
+                
             response.raise_for_status()
             
             # Debug: Save last HTML
