@@ -141,10 +141,16 @@ class Scraper:
             if self.api_key:
                 print(f"Routing request for {domain} through ScraperAPI...")
                 payload = {'api_key': self.api_key, 'url': url}
-                # Render JS if needed for highly dynamic SPA sites
-                if 'ajio' in domain or 'myntra' in domain:
+                
+                if 'myntra' in domain:
                     payload['render'] = 'true'
-                # Premium proxies can take longer to handshake
+                    payload['premium'] = 'true'
+                elif 'ajio' in domain:
+                    payload['render'] = 'true'
+                    payload['country_code'] = 'in'
+                    # Do not use premium for Ajio, it causes ScraperAPI 500 internal errors
+                    
+                # ScraperAPI requests can take longer to handshake
                 response = requests.get('http://api.scraperapi.com', params=payload, timeout=60)
             else:
                 response = requests.get(url, headers=headers, timeout=10)
