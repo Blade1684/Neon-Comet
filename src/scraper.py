@@ -1,9 +1,14 @@
-
 import requests
 from bs4 import BeautifulSoup
 import re
+import json
 from urllib.parse import urlparse
 from .sites import SITE_SELECTORS
+
+try:
+    import cloudscraper
+except ImportError:
+    cloudscraper = None
 
 
 class Scraper:
@@ -25,6 +30,15 @@ class Scraper:
             'Sec-Fetch-User': '?1',
             'Cache-Control': 'max-age=0',
         }
+        
+        if cloudscraper:
+            self.cloud_session = cloudscraper.create_scraper(browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'mobile': False
+            })
+        else:
+            self.cloud_session = requests.Session()
 
     def _get_domain(self, url):
         parsed = urlparse(url)
@@ -37,10 +51,12 @@ class Scraper:
     def _clean_price(self, price_str):
         if not price_str:
             return None
+        if isinstance(price_str, (int, float)):
+            return float(price_str)
         # Remove non-numeric chars except .
         # Handle cases like "₹ 1,20,000" -> 120000.0
         # Remove currency symbols and commas
-        clean_str = re.sub(r'[^\d.]', '', price_str)
+        clean_str = re.sub(r'[^\d.]', '', str(price_str))
         try:
             return float(clean_str)
         except ValueError:
@@ -75,6 +91,42 @@ class Scraper:
             
         return None
 
+    def _extract_json_ld(self, soup):
+        # Strategy for sites like Myntra that embed Product data in JSON-LD
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                # Some sites have multiple JSON blocks concatenated or poorly formatted
+                content = script.string
+                if not content:
+                    continue
+                data = json.loads(content)
+                
+                # Handle single object vs list of objects
+                if isinstance(data, dict):
+                    data = [data]
+                
+                for item in data:
+                    if item.get('@type') == 'Product':
+                        title = item.get('name', 'Unknown Product')
+                        offers = item.get('offers', {})
+                        
+                        # Offers could be a dict or a list of dicts
+                        price = None
+                        if isinstance(offers, dict):
+                            price = offers.get('price')
+                        elif isinstance(offers, list) and len(offers) > 0:
+                            price = offers[0].get('price')
+                            
+                        if price:
+                            return {
+                                'price': self._clean_price(price),
+                                'title': title
+                            }
+            except Exception as e:
+                print(f"JSON-LD Parsing Error: {e}")
+                continue
+        return None
 
     def get_price(self, url):
         domain = self._get_domain(url)
@@ -90,25 +142,37 @@ class Scraper:
         
         if not selector_config:
             print(f"Warning: No configuration found for domain {domain}. Please add selector manually.")
-            # Could try generic meta price?
             return None
-
-        selector = selector_config.get('price')
 
         # Rotate UA or use standard
         headers = self.headers.copy()
         
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            # Use cloudscraper for Ajio as standard requests are blocked (403 Forbidden)
+            if 'ajio' in domain:
+                print("Using cloudscraper for Ajio...")
+                response = self.cloud_session.get(url, headers=headers, timeout=15)
+            else:
+                response = requests.get(url, headers=headers, timeout=10)
+                
             response.raise_for_status()
             
             # Debug: Save last HTML
             with open("debug_html.html", "wb") as f:
                 f.write(response.content)
 
-            
             soup = BeautifulSoup(response.content, 'lxml')
             
+            # Try JSON-LD parsing first if specified (e.g., Myntra)
+            if selector_config.get('type') == 'json-ld':
+                print(f"Using JSON-LD parsing for {domain}...")
+                json_data = self._extract_json_ld(soup)
+                if json_data and json_data.get('price'):
+                    return json_data
+                else:
+                    print("Could not find Product inside JSON-LD blocks.")
+                    return None
+
             # Special handling for Flipkart (Dynamic/React Native)
             if 'flipkart' in domain:
                 price_text = self._extract_flipkart_price(soup)
@@ -128,17 +192,17 @@ class Scraper:
                         'title': title
                     }
 
-            # Extract Price
-            price_selector = selector_config.get('price')
+            # Standard Extract Price using Config Selectors
+            selector = selector_config.get('price')
             price_element = None
             
-            if isinstance(price_selector, list):
-                for selector_item in price_selector:
+            if isinstance(selector, list):
+                for selector_item in selector:
                     price_element = soup.select_one(selector_item)
                     if price_element:
                         break
             else:
-                 price_element = soup.select_one(price_selector)
+                 price_element = soup.select_one(selector)
             
             # If fallback exists and first failed
             if not price_element and 'fallback' in selector_config:
@@ -163,7 +227,7 @@ class Scraper:
                     'title': title
                 }
             else:
-                print(f"Could not find element with selector: {selector}")
+                print(f"Could not find price element with selector: {selector}")
                 return None
 
         except Exception as e:

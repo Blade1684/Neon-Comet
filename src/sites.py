@@ -33,12 +33,12 @@ SITE_SELECTORS = {
         'notes': 'Updated with 2026/2025 selectors'
     },
     'myntra.com': {
-        'price': '.pdp-price strong, .pdp-price',
-        'notes': 'pdp-price class'
+        'type': 'json-ld',
+        'notes': 'Price embedded in application/ld+json'
     },
     'ajio.com': {
         'price': '.prod-sp',
-        'notes': 'prod-sp class'
+        'notes': 'prod-sp class (Requires cloudscraper)'
     },
     'books.toscrape.com': {
         'price': 'p.price_color',

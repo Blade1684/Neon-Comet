@@ -8,3 +8,4 @@ flask-cors
 Flask-SQLAlchemy
 APScheduler
 gunicorn
+cloudscraper
