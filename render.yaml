@@ -1,0 +1,7 @@
+version: "1"
+services:
+  - type: web
+    name: neon-comet
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
